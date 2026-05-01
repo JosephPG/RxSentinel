@@ -1,0 +1,79 @@
+[project]
+name = "rxsentinel"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "joseph"}
+]
+requires-python = ">=3.14,<4.0"
+dependencies = [
+    "pydantic (>=2.13.3,<3.0.0)",
+    "loguru (>=0.7.3,<0.8.0)",
+    "pydantic-settings (>=2.14.0,<3.0.0)"
+]
+
+[dependency-groups]
+dev = [
+    "ruff (>=0.15.12,<0.16.0)",
+    "ruff-lsp (>=0.0.62,<0.0.63)"
+]
+test = [
+    "pytest (>=9.0.3,<10.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 90
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+  "F",   # pyflakes
+  "E",   # pycodestyle
+  "W",
+  "I",   # isort
+  "N",   # Name conventions
+  "T20", # print
+  "G",   # logging
+  "ARG", # unused args
+]
+ignore = ["E501"]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+fixable = ["I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+section-order = [
+  "future",
+  "standard-library",
+  "third-party",
+  "first-party",
+  "tests",
+  "local-folder",
+]
+
+[tool.ruff.lint.isort.sections]
+"tests" = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/settings/*" = ["E402", "F405", "F403"]
+
+[tool.pytest.ini_options]
+addopts = "-s --cov --cov-append"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+omit = ['*/tests/*', '*__init__.py*']
+
+[tool.coverage.report]
+show_missing = true
+sort = "cover"
+
+[tool.coverage.xml]
+output = "coverage.xml"

@@ -13,3 +13,5 @@ class Host(CollectionBase):
 
 class Daemon(CollectionBase):
     _collection_name: ClassVar[str] = "deamons"
+
+    name: str

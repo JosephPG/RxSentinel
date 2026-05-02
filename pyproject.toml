@@ -10,7 +10,7 @@ dependencies = [
     "pydantic (>=2.13.3,<3.0.0)",
     "loguru (>=0.7.3,<0.8.0)",
     "pydantic-settings (>=2.14.0,<3.0.0)",
-    "arangomapper @ file:///home/onex/Proyectos/sunat/ArangoMapper"
+    "arangomapper @ git+https://github.com/JosephPG/ArangoMapper.git",
 ]
 
 [dependency-groups]
@@ -78,5 +78,3 @@ sort = "cover"
 
 [tool.coverage.xml]
 output = "coverage.xml"
-[tool.poetry.dependencies]
-arangomapper = {develop = true}

@@ -189,7 +189,7 @@ optional = false
 python-versions = ">=3.14,<4.0"
 groups = ["main"]
 files = []
-develop = true
+develop = false
 
 [package.dependencies]
 loguru = ">=0.7.3,<0.8.0"
@@ -199,8 +199,10 @@ python-arango = ">=8.3.2,<9.0.0"
 python-arango-async = ">=1.2.2,<2.0.0"
 
 [package.source]
-type = "directory"
-url = "../ArangoMapper"
+type = "git"
+url = "https://github.com/JosephPG/ArangoMapper.git"
+reference = "HEAD"
+resolved_reference = "147f5886a096425f3f79affadb683dc2c5a3c557"
 
 [[package]]
 name = "attrs"
@@ -1668,4 +1670,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.14,<4.0"
-content-hash = "d67d94c3a5422c188b2e1cd1df187acb9bbb619f007e652393254474e8042286"
+content-hash = "fe0d1a1dbb6b4059e31ddd81593b4c1e3a8a713fd86cd2a0547ce52979b80c42"

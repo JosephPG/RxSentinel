@@ -9,7 +9,8 @@ requires-python = ">=3.14,<4.0"
 dependencies = [
     "pydantic (>=2.13.3,<3.0.0)",
     "loguru (>=0.7.3,<0.8.0)",
-    "pydantic-settings (>=2.14.0,<3.0.0)"
+    "pydantic-settings (>=2.14.0,<3.0.0)",
+    "arangomapper @ file:///home/onex/Proyectos/sunat/ArangoMapper"
 ]
 
 [dependency-groups]
@@ -64,7 +65,7 @@ section-order = [
 "**/settings/*" = ["E402", "F405", "F403"]
 
 [tool.pytest.ini_options]
-addopts = "-s --cov --cov-append"
+addopts = "-s --cov=app --cov-append tests"
 testpaths = ["tests"]
 
 [tool.coverage.run]
@@ -77,3 +78,5 @@ sort = "cover"
 
 [tool.coverage.xml]
 output = "coverage.xml"
+[tool.poetry.dependencies]
+arangomapper = {develop = true}

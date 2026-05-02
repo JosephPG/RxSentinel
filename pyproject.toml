@@ -65,7 +65,7 @@ section-order = [
 "**/settings/*" = ["E402", "F405", "F403"]
 
 [tool.pytest.ini_options]
-addopts = "-s --cov --cov-append"
+addopts = "-s --cov=app --cov-append tests"
 testpaths = ["tests"]
 
 [tool.coverage.run]

@@ -1,0 +1,7 @@
+services:
+  broker:
+    image: apache/kafka:latest
+    expose:
+      - 9092
+    ports:
+      - 9092:9092

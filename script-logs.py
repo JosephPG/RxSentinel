@@ -34,7 +34,9 @@ async def run_producer(topic: str):
         transaction_active = True
 
         msgs = [
-            await producer.produce(topic=topic, key=f"testkey{i}", value=f"testvalue{i}")
+            await producer.produce(
+                topic=topic, key=f"newtestkey{i}", value=f"newtestvalue{i}"
+            )
             for i in range(10)
         ]
 

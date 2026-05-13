@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     ARANGO_DB: str = "sentinel"
     ARANGO_USERNAME: str = ""
     ARANGO_PASSWORD: str = ""
+    KAFKA_SERVERLOG_TOPIC: str = "server-logs"
+    KAFKA_SERVERLOG_HOST: str = "localhost:9092"
 
 
 settings = Settings()

@@ -1,7 +1,5 @@
-import sys
-from asyncio import AbstractEventLoop
-from signal import SIGINT, signal
-from typing import Callable, ClassVar
+from asyncio import AbstractEventLoop, shield
+from typing import Callable
 
 from confluent_kafka.aio import AIOConsumer
 from loguru import logger
@@ -16,14 +14,9 @@ from config import settings
 
 
 class ServerLogs(BaseModel, Stream):
-    RUNNING: ClassVar[bool] = True
+    running: bool = True
 
     def run(self):
-        def stop(*_):
-            ServerLogs.RUNNING = False
-
-        signal(SIGINT, stop)
-
         with loop_event() as loop:
             aio_scheduler = AsyncIOScheduler(loop=loop)
 
@@ -47,7 +40,10 @@ class ServerLogs(BaseModel, Stream):
 
     async def _consumer(self):
         """
-        Un contextmanager debe hacer yield exactamente una vez por eso se opto por async for
+        Contextmanager debe hacer yield exactamente una vez por eso se opto por async for
+        consumer.commit(): save offset in broker
+        consumer.store_offsets(): save processed message to local memory
+        shield: https://docs.python.org/es/3.13/library/asyncio-task.html#asyncio.shield
         """
         consumer = AIOConsumer(
             kafka_consumer_conf(
@@ -61,7 +57,7 @@ class ServerLogs(BaseModel, Stream):
         offset = 1
         try:
             await consumer.subscribe([settings.KAFKA_SERVERLOG_TOPIC])
-            while ServerLogs.RUNNING:
+            while self.running:
                 logger.info("run")
 
                 if (message := await consumer.poll()) is None:
@@ -78,26 +74,24 @@ class ServerLogs(BaseModel, Stream):
                 offset += 1
 
                 if offset % 100 == 0:
-                    await consumer.commit()  # save offset in broker
+                    await consumer.commit()
                     logger.info("Stored offsets were committed")
+
+            if not self.running:
+                raise KeyboardInterrupt
         except Exception as _:
             logger.exception("Error in consumer loop")
         finally:
-            await consumer.unsubscribe()
-            await consumer.close()
-            logger.info("Closed consumer")
-            sys.exit(0)
+            await shield(consumer.unsubscribe())
+            await shield(consumer.close())
+            logger.info("Close consumer")
 
     async def _validate_message(self, consumer: AIOConsumer, message) -> any:
         try:
             response = message
-            await consumer.store_offsets(
-                message=message
-            )  # save processed message to local memory
+            await consumer.store_offsets(message=message)
             return response
         except Exception as _:
             logger.exception("Error in _process_message")
-            await consumer.store_offsets(
-                message=message
-            )  # save processed message to local memory
+            await consumer.store_offsets(message=message)
             return None

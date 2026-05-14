@@ -1,28 +1,54 @@
+import os
 import socket
-from asyncio import new_event_loop
+from asyncio import new_event_loop, tasks
 from contextlib import contextmanager
+
+from loguru import logger
 
 
 @contextmanager
 def loop_event():
-    loop = new_event_loop()
+    try:
+        loop = new_event_loop()
+        yield loop
 
-    yield loop
+        loop.run_forever()
+    except KeyboardInterrupt:
+        """ See doc for asyncio Runner in close() method"""
+        logger.info("Stop loop")
 
-    loop.run_forever()
-    loop.close()
+        to_cancel = tasks.all_tasks(loop)
+
+        for task in to_cancel:
+            task.cancel()
+
+        if to_cancel:
+            loop.run_until_complete(
+                tasks.gather(*to_cancel, return_exceptions=True)
+            )  # wait to cancel tasks
+    finally:
+        loop.stop()
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.run_until_complete(loop.shutdown_default_executor())
+        loop.close()
+        logger.info("Close loop")
+
+        os._exit(0)
 
 
 def kafka_consumer_conf(ops: dict = {}):
+    """
+    https://kafka.apache.org/42/configuration/consumer-configs/
+    """
     return (
         {
             "group.id": "",
             "bootstrap.servers": "",
             "client.id": socket.gethostname(),
-            "auto.offset.reset": "latest",  # El consumidor ignora el pasado. Solo leerá los mensajes nuevos que lleguen a partir del momento en que se conecta.
+            "auto.offset.reset": "latest",
             "enable.auto.commit": "false",  # Apaga el guardado automático de progreso en Kafka.
             "enable.auto.offset.store": "false",  # Apaga el almacenamiento automático del progreso en la memoria local del cliente Kafka
-            "partition.assignment.strategy": "cooperative-sticky",  # Define la estrategia para repartir las particiones entre los miembros del group.id
+            "partition.assignment.strategy": "cooperative-sticky",
         }
         | ops
     )

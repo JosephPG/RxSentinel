@@ -1,40 +1,65 @@
-from asyncio import AbstractEventLoop, shield
+import asyncio
+from asyncio import AbstractEventLoop, Task, shield
 from typing import Callable
 
+import arangomapper
+from arangomapper import (
+    AsyncAQLManager,
+    AsyncCollectionManager,
+    AsyncConn,
+    AsyncStandardDatabase,
+)
 from confluent_kafka.aio import AIOConsumer
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 from reactivex import Subject, create, operators
 from reactivex.observer import AutoDetachObserver
 from reactivex.scheduler.eventloop import AsyncIOScheduler
 
+from app.models import Logs
 from app.streams.base import Stream
-from app.streams.utils import kafka_consumer_conf, loop_event
+from app.streams.utils import kafka_consumer_conf
 from config import settings
 
 
 class ServerLogs(BaseModel, Stream):
     running: bool = True
 
-    def run(self):
-        with loop_event() as loop:
-            aio_scheduler = AsyncIOScheduler(loop=loop)
+    _loop: AbstractEventLoop | None = PrivateAttr(default=None)
+    _handle_task: Task | None = PrivateAttr(default=None)
 
-            proxy = Subject()
-            proxy.subscribe(on_next=lambda i: logger.success(f"proxy: {i}"))
+    async def run(self):
+        aio_scheduler = AsyncIOScheduler(loop=self.loop)
 
-            source = create(self._subscribe(loop))
-            source.pipe(operators.map(lambda i: f"echo: {i}")).subscribe(
-                proxy, scheduler=aio_scheduler
-            )
+        proxy = Subject()
+        proxy.subscribe(
+            on_next=lambda i: logger.success(f"proxy: {i}"),
+            on_completed=lambda: logger.success("Done!"),
+        )
 
-    def _subscribe(self, loop: AbstractEventLoop) -> Callable:
+        source = create(self._subscribe())
+        source.pipe(operators.map(lambda i: f"echo: {i}")).subscribe(
+            proxy, scheduler=aio_scheduler
+        )
+
+    @property
+    def loop(self) -> AbstractEventLoop:
+        if not self._loop:
+            self._loop = asyncio.get_running_loop()
+        return self._loop
+
+    @property
+    def handle_task(self) -> Task:
+        return self._handle_task
+
+    def _subscribe(self) -> Callable:
         def subscribe(observer: AutoDetachObserver, _):
             async def handle():
                 async for message in self._consumer():
                     observer.on_next(message)
+                observer.on_completed()
 
-            loop.create_task(handle())
+            self._handle_task = self.loop.create_task(handle())
 
         return subscribe
 
@@ -57,10 +82,11 @@ class ServerLogs(BaseModel, Stream):
         offset = 1
         try:
             await consumer.subscribe([settings.KAFKA_SERVERLOG_TOPIC])
-            while self.running:
-                logger.info("run")
 
-                if (message := await consumer.poll()) is None:
+            logger.info("run")
+
+            while self.running:
+                if (message := await consumer.poll(0.5)) is None:
                     continue
 
                 if err := message.error():
@@ -76,22 +102,24 @@ class ServerLogs(BaseModel, Stream):
                 if offset % 100 == 0:
                     await consumer.commit()
                     logger.info("Stored offsets were committed")
-
-            if not self.running:
-                raise KeyboardInterrupt
         except Exception as _:
             logger.exception("Error in consumer loop")
         finally:
-            await shield(consumer.unsubscribe())
-            await shield(consumer.close())
+            await consumer.unsubscribe()
+            await consumer.close()
             logger.info("Close consumer")
 
     async def _validate_message(self, consumer: AIOConsumer, message) -> any:
         try:
-            response = message
+            db: AsyncStandardDatabase = await AsyncConn.async_get_db(settings.ARANGO_DB)
+
+            manager = AsyncCollectionManager(db)
+            await manager.insert(Logs(value=message.value()))
+
             await consumer.store_offsets(message=message)
-            return response
+
+            return message
         except Exception as _:
             logger.exception("Error in _process_message")
             await consumer.store_offsets(message=message)
-            return None
+            return

@@ -3,6 +3,12 @@ from typing import ClassVar
 from arangomapper import CollectionBase
 
 
+class Logs(CollectionBase):
+    _collection_name: ClassVar[str] = "logs"
+
+    value: str
+
+
 class User(CollectionBase):
     _collection_name: ClassVar[str] = "users"
 

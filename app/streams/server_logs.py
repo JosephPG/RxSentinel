@@ -1,14 +1,13 @@
 import asyncio
-from asyncio import AbstractEventLoop, Task, shield
+from asyncio import AbstractEventLoop, Task
 from typing import Callable
 
-import arangomapper
 from arangomapper import (
-    AsyncAQLManager,
     AsyncCollectionManager,
     AsyncConn,
     AsyncStandardDatabase,
 )
+from confluent_kafka import Message
 from confluent_kafka.aio import AIOConsumer
 from loguru import logger
 from pydantic import BaseModel, PrivateAttr
@@ -24,6 +23,8 @@ from config import settings
 
 class ServerLogs(BaseModel, Stream):
     running: bool = True
+    poll_time: float | None = None
+    offset_limit: int = 100
 
     _loop: AbstractEventLoop | None = PrivateAttr(default=None)
     _handle_task: Task | None = PrivateAttr(default=None)
@@ -86,7 +87,9 @@ class ServerLogs(BaseModel, Stream):
             logger.info("run")
 
             while self.running:
-                if (message := await consumer.poll(0.5)) is None:
+                message = await self._poll(consumer)
+
+                if (message) is None:
                     continue
 
                 if err := message.error():
@@ -99,7 +102,7 @@ class ServerLogs(BaseModel, Stream):
                 yield message.value()
                 offset += 1
 
-                if offset % 100 == 0:
+                if offset % self.offset_limit == 0:
                     await consumer.commit()
                     logger.info("Stored offsets were committed")
         except Exception as _:
@@ -108,6 +111,11 @@ class ServerLogs(BaseModel, Stream):
             await consumer.unsubscribe()
             await consumer.close()
             logger.info("Close consumer")
+
+    async def _poll(self, consumer) -> Message:
+        if self.poll_time:
+            return await consumer.poll(self.poll_time)
+        return await consumer.poll()
 
     async def _validate_message(self, consumer: AIOConsumer, message) -> any:
         try:

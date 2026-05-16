@@ -10,7 +10,7 @@ from app.streams.server_logs import ServerLogs
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_server_logs(async_db: AsyncStandardDatabase):
-    sl = ServerLogs()
+    sl = ServerLogs(poll_time=0.5)
 
     create_task(sl.run())
 
@@ -23,7 +23,9 @@ async def test_server_logs(async_db: AsyncStandardDatabase):
 
     assert len(data) == 11
 
+    # testcontainers
+
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_another():
-    await sleep(10)
+    await sleep(1)

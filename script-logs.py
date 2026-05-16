@@ -35,7 +35,7 @@ async def run_producer(topic: str):
 
         msgs = [
             await producer.produce(
-                topic=topic, key=f"newtestkey{i}", value=f"newtestvalue{i}"
+                topic=topic, key=f"othertestkey{i}", value=f"othertestvalue{i}"
             )
             for i in range(10)
         ]

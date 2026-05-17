@@ -68,10 +68,9 @@ class ServerLogs(BaseModel, Stream):
 
     async def _consumer(self):
         """
-        Contextmanager debe hacer yield exactamente una vez por eso se opto por async for
-        consumer.commit(): save offset in broker
+        Contextmanager must perform yield exactly once, hence the choice of async for
         consumer.store_offsets(): save processed message to local memory
-        shield: https://docs.python.org/es/3.13/library/asyncio-task.html#asyncio.shield
+        consumer.commit(): save offset in broker
         """
         consumer = AIOConsumer(
             kafka_consumer_conf(

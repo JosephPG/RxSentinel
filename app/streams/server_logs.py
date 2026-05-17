@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import AbstractEventLoop, Task
+from asyncio import AbstractEventLoop, Task, sleep
 from typing import Callable
 
 from arangomapper import (
@@ -25,6 +25,8 @@ class ServerLogs(BaseModel, Stream):
     running: bool = True
     poll_time: float | None = None
     offset_limit: int = 100
+    url_bootstrap_server: str = settings.KAFKA_SERVERLOG_HOST
+    kafka_topic: str = settings.KAFKA_SERVERLOG_TOPIC
 
     _loop: AbstractEventLoop | None = PrivateAttr(default=None)
     _handle_task: Task | None = PrivateAttr(default=None)
@@ -74,30 +76,27 @@ class ServerLogs(BaseModel, Stream):
         consumer = AIOConsumer(
             kafka_consumer_conf(
                 {
-                    "group.id": f"{settings.KAFKA_SERVERLOG_TOPIC}_1",
-                    "bootstrap.servers": settings.KAFKA_SERVERLOG_HOST,
+                    "group.id": f"{self.kafka_topic}_1",
+                    "bootstrap.servers": self.url_bootstrap_server,
                 }
             )
         )
 
         offset = 1
         try:
-            await consumer.subscribe([settings.KAFKA_SERVERLOG_TOPIC])
+            await consumer.subscribe([self.kafka_topic])
 
             logger.info("run")
 
             while self.running:
-                message = await self._poll(consumer)
-
-                if (message) is None:
+                if not (message := await self._poll(consumer)):
                     continue
 
                 if err := message.error():
                     logger.error(err)
                     continue
 
-                if (message := await self._validate_message(consumer, message)) is None:
-                    continue
+                message = await self._process_message(consumer, message)
 
                 yield message.value()
                 offset += 1
@@ -105,7 +104,7 @@ class ServerLogs(BaseModel, Stream):
                 if offset % self.offset_limit == 0:
                     await consumer.commit()
                     logger.info("Stored offsets were committed")
-        except Exception as _:
+        except Exception:
             logger.exception("Error in consumer loop")
         finally:
             await consumer.unsubscribe()
@@ -117,17 +116,23 @@ class ServerLogs(BaseModel, Stream):
             return await consumer.poll(self.poll_time)
         return await consumer.poll()
 
-    async def _validate_message(self, consumer: AIOConsumer, message) -> any:
-        try:
-            db: AsyncStandardDatabase = await AsyncConn.async_get_db(settings.ARANGO_DB)
+    async def _process_message(self, consumer: AIOConsumer, message) -> Message:
+        # Loop or recursion for retrying in case of error? For unlimited retries,
+        # a loop is better because recursion will eventually trigger a stack overflow.
 
-            manager = AsyncCollectionManager(db)
-            await manager.insert(Logs(value=message.value()))
+        while self.running:
+            try:
+                db: AsyncStandardDatabase = await AsyncConn.async_get_db(
+                    settings.ARANGO_DB
+                )
 
-            await consumer.store_offsets(message=message)
+                manager = AsyncCollectionManager(db)
+                await manager.insert(Logs(value=message.value()))
 
-            return message
-        except Exception as _:
-            logger.exception("Error in _process_message")
-            await consumer.store_offsets(message=message)
-            return
+                await consumer.store_offsets(message=message)
+
+                return message
+            except Exception:
+                logger.exception("Error in _process_message")
+                logger.info("Retry _process_message")
+                await sleep(2)
